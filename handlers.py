@@ -1,6 +1,20 @@
+# Adicione estes imports no TOPO do arquivo
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ConversationHandler,
+    filters,
+    CallbackContext
+)
 from fuzzywuzzy import process
 import unicodedata
+import logging
+import json
+from firebase_config import initialize_firebase
 
+# Restante do código mantido...
 # Função para normalizar textos (remover acentos e converter para minúsculas)
 def normalize_text(text):
     text = unicodedata.normalize('NFKD', text).encode('ASCII', 'ignore').decode('ASCII')
