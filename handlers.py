@@ -9,28 +9,24 @@ from telegram.ext import (
     filters,
     CallbackContext
 )
-from firebase_config import initialize_firebase  # Firebase configurado
+from firebase_config import initialize_firebase
 
-# Configuração do logging
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Inicializa o Firebase
 courses_ref = initialize_firebase()
 
-# Estados para o ConversationHandler de adicionar curso
 AD_NOME, AD_AREA, AD_LINK = range(3)
-# Estados para editar curso
 ED_NOME, ED_CAMPO, ED_VALOR = range(3, 6)
-# Estado para apagar curso (apenas nome)
 AP_NOME = 6
 
-# Opções de áreas
 AREAS_DISPONIVEIS = [
     "humanas", "matematica", "ciencias da natureza", "redacao", "linguagens"
 ]
 
-# /start: Mostra o menu principal
 async def start(update: Update, context: CallbackContext):
     msg = (
         "👋 Olá! Eu sou o bot de cursos. Comandos disponíveis:\n"
@@ -43,7 +39,6 @@ async def start(update: Update, context: CallbackContext):
     )
     await update.message.reply_text(msg)
 
-# --- Adicionar Curso ---
 async def add_course_start(update: Update, context: CallbackContext):
     await update.message.reply_text("🔹 Qual é o nome do curso que deseja adicionar?")
     return AD_NOME
@@ -79,7 +74,6 @@ async def add_course_link(update: Update, context: CallbackContext):
     nome = context.user_data["add_nome"]
     area = context.user_data["add_area"]
     
-    # Salva no Firebase
     course_data = {
         'nome': nome,
         'area': area,
@@ -93,9 +87,7 @@ async def add_course_link(update: Update, context: CallbackContext):
     )
     return ConversationHandler.END
 
-# --- Listar Cursos e Consultar Link ---
 async def list_courses(update: Update, context: CallbackContext):
-    # Recupera cursos do Firebase
     courses = courses_ref.get() or {}
     if not courses:
         await update.message.reply_text("❗ Nenhum curso cadastrado.")
@@ -113,14 +105,12 @@ async def list_courses(update: Update, context: CallbackContext):
     msg += "\nPara consultar o link, use: /curso <nome do curso>"
     await update.message.reply_text(msg)
 
-# /curso: Retorna o link do curso (argumento obrigatório)
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text("❗ Uso: /curso <nome do curso>")
         return
     nome = " ".join(context.args).strip()
     
-    # Busca curso no Firebase
     courses = courses_ref.get() or {}
     found_course = None
     for curso_id, curso_info in courses.items():
@@ -134,14 +124,12 @@ async def get_course_link(update: Update, context: CallbackContext):
     else:
         await update.message.reply_text(f"❗ Curso '{nome}' não encontrado.")
 
-# --- Editar Curso ---
 async def edit_course_start(update: Update, context: CallbackContext):
     await update.message.reply_text("🔹 Envie o nome do curso que deseja editar:")
     return ED_NOME
 
 async def edit_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
-    # Busca curso no Firebase
     courses = courses_ref.get() or {}
     curso_encontrado = None
     for curso_id, curso_info in courses.items():
@@ -173,7 +161,6 @@ async def edit_course_value(update: Update, context: CallbackContext):
     nome = context.user_data["edit_nome"]
     field = context.user_data["edit_field"]
     
-    # Busca e edita no Firebase
     courses = courses_ref.get() or {}
     for curso_id, curso_info in courses.items():
         if curso_info["nome"].lower() == nome.lower():
@@ -187,7 +174,6 @@ async def edit_course_value(update: Update, context: CallbackContext):
     await update.message.reply_text(f"✅ Curso '{nome}' atualizado com sucesso!")
     return ConversationHandler.END
 
-# --- Apagar Curso ---
 async def delete_course_start(update: Update, context: CallbackContext):
     await update.message.reply_text("🔹 Envie o nome do curso que deseja apagar:")
     return AP_NOME
@@ -210,55 +196,34 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
     await start(update, context)
     return ConversationHandler.END
 
-# --- Cancelar ---
 async def cancel(update: Update, context: CallbackContext):
     await update.message.reply_text("🚫 Operação cancelada.")
     return ConversationHandler.END
 
-def main():
-    bot_token = "BOT_TOKEN"  # Substitua pelo token do seu bot
+add_conv = ConversationHandler(
+    entry_points=[CommandHandler("adicionar_curso", add_course_start)],
+    states={
+        AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
+        AD_AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_area)],
+        AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)],
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
 
-    app = Application.builder().token(bot_token).build()
+edit_conv = ConversationHandler(
+    entry_points=[CommandHandler("editar_curso", edit_course_start)],
+    states={
+        ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
+        ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
+        ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)],
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
 
-    # ConversationHandler para adicionar curso
-    add_conv = ConversationHandler(
-        entry_points=[CommandHandler("adicionar_curso", add_course_start)],
-        states={
-            AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
-            AD_AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_area)],
-            AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)],
-        },
-        fallbacks=[CommandHandler("cancelar", cancel)]
-    )
-
-    # ConversationHandler para editar curso
-    edit_conv = ConversationHandler(
-        entry_points=[CommandHandler("editar_curso", edit_course_start)],
-        states={
-            ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
-            ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
-            ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)],
-        },
-        fallbacks=[CommandHandler("cancelar", cancel)]
-    )
-
-    # ConversationHandler para apagar curso
-    del_conv = ConversationHandler(
-        entry_points=[CommandHandler("apagar_curso", delete_course_start)],
-        states={
-            AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)],
-        },
-        fallbacks=[CommandHandler("cancelar", cancel)]
-    )
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("listar_cursos", list_courses))
-    app.add_handler(CommandHandler("curso", get_course_link))
-    app.add_handler(add_conv)
-    app.add_handler(edit_conv)
-    app.add_handler(del_conv)
-
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+del_conv = ConversationHandler(
+    entry_points=[CommandHandler("apagar_curso", delete_course_start)],
+    states={
+        AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)],
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
