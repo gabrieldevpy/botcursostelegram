@@ -216,7 +216,7 @@ async def cancel(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 def main():
-    bot_token = "7990357492:AAGkw-XJNIi95RoTu_Jn2w7QIWhJCnXM7mQ"  # Substitua pelo token do seu bot
+    bot_token = "BOT_TOKEN"  # Substitua pelo token do seu bot
 
     app = Application.builder().token(bot_token).build()
 
