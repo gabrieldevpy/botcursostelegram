@@ -17,7 +17,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Inicializa o Firebase
-courses_ref = initialize_firebase().reference("cursos")
+courses_ref = initialize_firebase().child("cursos")
 
 # Estados para o ConversationHandler de adicionar curso
 AD_NOME, AD_AREA, AD_LINK = range(3)
