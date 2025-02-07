@@ -1,5 +1,5 @@
 import os
-from telegram.ext import Application
+from telegram.ext import Application, CommandHandler  # Adicione CommandHandler aqui
 from handlers import add_conv, edit_conv, del_conv, start, list_courses, get_course_link
 from dotenv import load_dotenv
 
@@ -12,10 +12,12 @@ def main():
 
     app = Application.builder().token(bot_token).build()
     
+    # Adicione os handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("listar_cursos", list_courses))
     app.add_handler(CommandHandler("curso", get_course_link))
     
+    # Adicione os ConversationHandlers
     app.add_handlers([add_conv, edit_conv, del_conv])
     
     print("🤖 Bot iniciado!")
