@@ -29,9 +29,9 @@ AD_NOME, AD_AREA, AD_LINK = range(3)
 ED_NOME, ED_CAMPO, ED_VALOR = range(3, 6)
 AP_NOME = 6
 
-# Opções de áreas disponíveis
+# Opções de áreas disponíveis (agora com a categoria "geral")
 AREAS_DISPONIVEIS = [
-    "humanas", "matematica", "ciencias da natureza", "redacao", "linguagens"
+    "geral", "humanas", "matematica", "ciencias da natureza", "redacao", "linguagens"
 ]
 
 def normalize_text(text: str) -> str:
@@ -160,7 +160,7 @@ async def add_course_link(update: Update, context: CallbackContext):
     )
     logger.info(f"Curso adicionado: {nome} na área {area} com link {link}")
     
-    # --- Envio de Notificação para todos os contatos ---
+    # --- Envio de Notificação para TODOS os contatos ---
     contacts_ref = db.reference('contacts')
     contacts = contacts_ref.get() or {}
     notification_message = (
