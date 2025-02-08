@@ -71,8 +71,8 @@ def build_courses_message() -> str:
 def build_main_keyboard() -> InlineKeyboardMarkup:
     """Constroi o teclado inline principal com as opções do bot."""
     keyboard = [
-        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
-        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos")],
+        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="listar_cursos")],
+        [InlineKeyboardButton("📚 Listar Cursos", callback_data="adicionar_curso")],
         [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
         [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
     ]
