@@ -60,20 +60,25 @@ def build_courses_message() -> str:
     msg = "📚 *Cursos Disponíveis:*\n"
     for area, nomes in grouped.items():
         msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
-    msg += "\nPara selecionar um curso, use o comando `/curso <nome do curso>`."
+    
+    msg += (
+        "\n\n🔎 Para visualizar os detalhes de um curso, digite o comando:\n"
+        "`/curso <nome do curso>`\n"
+        "Exemplo: `/curso Matemática`"
+    )
     return msg
 
 # --- Handler de Comando /start ---
 async def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("Adicionar Curso", callback_data="adicionar_curso")],
-        [InlineKeyboardButton("Listar Cursos", callback_data="listar_cursos_btn")],
-        [InlineKeyboardButton("Editar Curso", callback_data="editar_curso")],
-        [InlineKeyboardButton("Apagar Curso", callback_data="apagar_curso")]
+        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
+        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos_btn")],
+        [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
+        [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     msg = (
-        "👋 Olá! Seja bem-vindo ao *Bot de Cursos*!\n\n"
+        "👋 Olá! Seja bem-vindo ao *Bot de Cursos*.\n\n"
         "Escolha uma das opções abaixo:"
     )
     effective_message = get_effective_message(update)
@@ -82,13 +87,13 @@ async def start(update: Update, context: CallbackContext):
 # --- Fluxo para Adicionar Curso ---
 async def add_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
-    await effective_message.reply_text("🤔 Qual é o nome do curso que você gostaria de adicionar?")
+    await effective_message.reply_text("🤔 Por favor, informe o nome do curso que deseja adicionar:")
     return AD_NOME
 
 async def add_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     if not nome:
-        await update.message.reply_text("Ops! Não recebi o nome. Tente novamente, por favor.")
+        await update.message.reply_text("⚠️ Ops! Não recebi o nome. Tente novamente, por favor.")
         return AD_NOME
 
     context.user_data["add_nome"] = nome
@@ -108,7 +113,7 @@ async def add_course_area_callback(update: Update, context: CallbackContext):
     context.user_data["add_area"] = area
 
     await query.edit_message_text(
-        f"👍 Você escolheu *{area.capitalize()}*.\nAgora, envie o link do curso:",
+        f"👍 Ótima escolha! Você selecionou *{area.capitalize()}*.\nAgora, envie o link do curso:",
         parse_mode="Markdown"
     )
     return AD_LINK
@@ -126,7 +131,7 @@ async def add_course_link(update: Update, context: CallbackContext):
     courses_ref.push(course_data)
 
     await update.message.reply_text(
-        f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUse o botão 'Listar Cursos' para conferir todos os cursos.",
+        f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUtilize o botão *📚 Listar Cursos* para visualizar todos os cursos disponíveis.",
         parse_mode="Markdown"
     )
     return ConversationHandler.END
@@ -142,14 +147,14 @@ async def list_courses_button(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer("Listando cursos...")
     msg = build_courses_message()
-    # Aqui, em vez de editar a mensagem, enviamos uma nova mensagem
+    # Envia uma nova mensagem com a lista de cursos
     await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text(
-            "❗ Para consultar um curso, use:\n`/curso <nome do curso>`",
+            "❗ Para consultar um curso, utilize:\n`/curso <nome do curso>`",
             parse_mode="Markdown"
         )
         return
@@ -199,7 +204,7 @@ async def get_course_link(update: Update, context: CallbackContext):
 # --- Fluxo para Editar Curso ---
 async def edit_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
-    await effective_message.reply_text("✏️ Qual é o nome do curso que você deseja editar?")
+    await effective_message.reply_text("✏️ Informe o nome do curso que deseja editar:")
     return ED_NOME
 
 async def edit_course_nome(update: Update, context: CallbackContext):
@@ -215,7 +220,7 @@ async def edit_course_nome(update: Update, context: CallbackContext):
     context.user_data["edit_nome"] = best_match
 
     await update.message.reply_text(
-        f"✏️ Editando o curso *{best_match}*.\nAgora, qual campo você deseja alterar? (responda com *nome* ou *link*)",
+        f"✏️ Editando o curso *{best_match}*.\n\nPor favor, informe qual campo deseja alterar (digite *nome* ou *link*):",
         parse_mode="Markdown"
     )
     return ED_CAMPO
@@ -224,7 +229,7 @@ async def edit_course_field(update: Update, context: CallbackContext):
     field = update.message.text.strip().lower()
     if field not in ["nome", "link"]:
         await update.message.reply_text(
-            "❗ Por favor, digite *nome* ou *link* para indicar o campo que deseja alterar.",
+            "❗ Digite apenas *nome* ou *link* para indicar o campo a ser alterado.",
             parse_mode="Markdown"
         )
         return ED_CAMPO
@@ -236,7 +241,7 @@ async def edit_course_field(update: Update, context: CallbackContext):
 async def edit_course_value(update: Update, context: CallbackContext):
     new_value = update.message.text.strip()
     if not new_value:
-        await update.message.reply_text("Ops, o valor não pode ser vazio. Operação cancelada!")
+        await update.message.reply_text("⚠️ O valor não pode ser vazio. Operação cancelada!")
         return ConversationHandler.END
 
     old_name = context.user_data.get("edit_nome")
@@ -255,7 +260,7 @@ async def edit_course_value(update: Update, context: CallbackContext):
 # --- Fluxo para Apagar Curso ---
 async def delete_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
-    await effective_message.reply_text("🗑️ Qual é o nome do curso que você deseja apagar?")
+    await effective_message.reply_text("🗑️ Por favor, informe o nome do curso que deseja apagar:")
     return AP_NOME
 
 async def delete_course_confirm(update: Update, context: CallbackContext):
