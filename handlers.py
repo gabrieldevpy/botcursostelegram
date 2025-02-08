@@ -67,7 +67,7 @@ def build_courses_message() -> str:
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Adicionar Curso", callback_data="adicionar_curso")],
-        [InlineKeyboardButton("Listar Cursos", callback_data="listar_cursos")],
+        [InlineKeyboardButton("Listar Cursos", callback_data="listar_cursos_btn")],
         [InlineKeyboardButton("Editar Curso", callback_data="editar_curso")],
         [InlineKeyboardButton("Apagar Curso", callback_data="apagar_curso")]
     ]
@@ -137,17 +137,13 @@ async def list_courses(update: Update, context: CallbackContext):
     msg = build_courses_message()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# Função para o callback do botão "Listar Cursos"
-async def list_courses_callback(update: Update, context: CallbackContext):
+# Nova função para o callback do botão "Listar Cursos"
+async def list_courses_button(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer("Listando cursos...")
     msg = build_courses_message()
-    try:
-        await query.edit_message_text(msg, parse_mode="Markdown")
-    except Exception as e:
-        logger.error(f"Erro ao editar mensagem: {e}")
-        # Se ocorrer erro, envia uma nova mensagem
-        await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
+    # Aqui, em vez de editar a mensagem, enviamos uma nova mensagem
+    await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -341,8 +337,8 @@ def main():
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handler para o botão "Listar Cursos" (callback inline)
-    application.add_handler(CallbackQueryHandler(list_courses_callback, pattern="^listar_cursos$"))
+    # Handler para o botão "Listar Cursos" (novo callback_data: listar_cursos_btn)
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos_btn$"))
     
     application.run_polling()
 
