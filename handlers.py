@@ -379,16 +379,16 @@ def main():
     application.add_handler(CommandHandler("listar_cursos", list_courses))
     application.add_handler(CommandHandler("curso", get_course_link))
     
+    # Primeiro, adiciona o handler para o botão "Listar Cursos"
+    # Usamos o grupo -1 para garantir prioridade (antes de eventuais ConversationHandlers)
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=-1)
+    
     # ConversationHandlers
     application.add_handler(add_conv)
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
-    # Usando âncoras para que o padrão corresponda exatamente:
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=0)
-    
-    # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
+    # Handler genérico para debug de callback queries que não forem capturados
     application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
     
     logger.info("Bot iniciado.")
