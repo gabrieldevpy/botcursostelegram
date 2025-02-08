@@ -54,7 +54,7 @@ async def start(update: Update, context: CallbackContext):
 # --- Callback Handler para Botões ---
 async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # Responde ao callback (obrigatório)
 
     if query.data == "add_course":
         await query.edit_message_text("🔹 Qual é o nome do curso que deseja adicionar?")
@@ -120,9 +120,12 @@ async def add_course_link(update: Update, context: CallbackContext):
 
 # --- Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+
     courses = courses_ref.get() or {}
     if not courses:
-        await update.callback_query.edit_message_text("❗ Nenhum curso cadastrado.")
+        await query.edit_message_text("❗ Nenhum curso cadastrado.")
         return
     
     grouped = {}
@@ -136,7 +139,7 @@ async def list_courses(update: Update, context: CallbackContext):
         msg += "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
     
     msg += "\nPara consultar o link, use: /curso <nome do curso>"
-    await update.callback_query.edit_message_text(msg)
+    await query.edit_message_text(msg)
 
 # --- Busca de Curso com Fuzzy Matching ---
 async def get_course_link(update: Update, context: CallbackContext):
