@@ -4,7 +4,6 @@ from firebase_config import initialize_firebase
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
     CommandHandler,
     MessageHandler,
     ConversationHandler,
@@ -21,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Inicializa o Firebase (certifique-se de que a função initialize_firebase esteja correta)
+# Inicializa o Firebase (confirme que initialize_firebase está correto)
 courses_ref = initialize_firebase()
 
 # Estados para os ConversationHandlers
@@ -62,7 +61,7 @@ def build_courses_message() -> str:
         msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
     
     msg += (
-        "\n\n🔎 Para visualizar os detalhes de um curso, digite o comando:\n"
+        "\n\n🔎 Para visualizar os detalhes de um curso, use o comando:\n"
         "`/curso <nome do curso>`\n"
         "Exemplo: `/curso Matemática`"
     )
@@ -74,7 +73,8 @@ def build_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
         [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos")],
         [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
-        [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
+        [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")],
+        [InlineKeyboardButton("❌ Cancelar Operação", callback_data="cancelar_operacao")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -87,7 +87,21 @@ async def start(update: Update, context: CallbackContext):
     )
     effective_message = get_effective_message(update)
     await effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode="Markdown")
-    logger.info("Menu /start exibido com inline keyboard.")
+    logger.info("Menu /start exibido com teclado inline.")
+
+# --- Botão Cancelar Operação (callback) ---
+async def cancel_operation(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer("Operação cancelada!")
+    await query.edit_message_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
+    logger.info("Operação cancelada via botão.")
+
+# --- Fallback Cancelar para conversas ---
+async def cancel(update: Update, context: CallbackContext):
+    effective_message = get_effective_message(update)
+    await effective_message.reply_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
+    logger.info("Operação cancelada pelo usuário.")
+    return ConversationHandler.END
 
 # --- Fluxo para Adicionar Curso ---
 async def add_course_start(update: Update, context: CallbackContext):
@@ -103,24 +117,19 @@ async def add_course_nome(update: Update, context: CallbackContext):
     if not nome:
         await update.message.reply_text("⚠️ Ops! Não recebi o nome. Tente novamente, por favor.")
         return AD_NOME
-
     context.user_data["add_nome"] = nome
-
-    keyboard = [
-        [InlineKeyboardButton(area.capitalize(), callback_data=area)]
-        for area in AREAS_DISPONIVEIS
-    ]
+    keyboard = [[InlineKeyboardButton(area.capitalize(), callback_data=area)]
+                for area in AREAS_DISPONIVEIS]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("🚀 Selecione a área do curso:", reply_markup=reply_markup)
     return AD_AREA
 
 async def add_course_area_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()  # Remove o indicador de carregamento do botão
+    await query.answer()
     area = query.data
     context.user_data["add_area"] = area
     logger.info(f"Callback de seleção de área acionado: {area}")
-
     await query.edit_message_text(
         f"👍 Ótima escolha! Você selecionou *{area.capitalize()}*.\nAgora, envie o link do curso:",
         parse_mode="Markdown"
@@ -131,14 +140,8 @@ async def add_course_link(update: Update, context: CallbackContext):
     link = update.message.text.strip()
     nome = context.user_data.get("add_nome")
     area = context.user_data.get("add_area")
-
-    course_data = {
-        "nome": nome,
-        "area": area,
-        "link": link
-    }
+    course_data = {"nome": nome, "area": area, "link": link}
     courses_ref.push(course_data)
-
     await update.message.reply_text(
         f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUtilize o botão *📚 Listar Cursos* para visualizar todos os cursos disponíveis.",
         parse_mode="Markdown"
@@ -147,43 +150,25 @@ async def add_course_link(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Fluxo para Listar Cursos ---
-# Função para o comando /listar_cursos
 async def list_courses(update: Update, context: CallbackContext):
     msg = build_courses_message()
     await update.message.reply_text(msg, parse_mode="Markdown")
     logger.info("Comando /listar_cursos acionado.")
 
-# Função para o callback do botão "Listar Cursos"
 async def list_courses_button(update: Update, context: CallbackContext):
     try:
         query = update.callback_query
         logger.info(f"Callback recebido com data: {query.data}")
         await query.answer("Listando cursos...")
         logger.info("Callback 'listar_cursos' acionado.")
-
         msg = build_courses_message()
-        # Reinsere o teclado inline para que o botão continue disponível
         reply_markup = build_main_keyboard()
-        
-        await query.edit_message_text(
-            text=msg,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text(text=msg, reply_markup=reply_markup, parse_mode="Markdown")
         logger.info("Mensagem editada com teclado inline para listar cursos.")
     except Exception as e:
         logger.error(f"Erro no list_courses_button: {e}")
 
-# --- Handler Genérico para Debug de Callback Queries ---
-async def generic_callback_logger(update: Update, context: CallbackContext):
-    try:
-        query = update.callback_query
-        logger.info(f"Generic callback recebido: {query.data}")
-        await query.answer("Callback recebido (genérico)")
-    except Exception as e:
-        logger.error(f"Erro no generic_callback_logger: {e}")
-
-# --- Fluxo para Consultar Curso (via comando) ---
+# --- Fluxo para Consultar Curso ---
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text(
@@ -191,10 +176,8 @@ async def get_course_link(update: Update, context: CallbackContext):
             parse_mode="Markdown"
         )
         return
-
     user_input = " ".join(context.args).strip()
     courses = courses_ref.get() or {}
-
     course_list = []
     original_names = {}
     for curso_id, curso_info in courses.items():
@@ -202,25 +185,20 @@ async def get_course_link(update: Update, context: CallbackContext):
         normalized = normalize_text(original)
         course_list.append(normalized)
         original_names[normalized] = original
-
     if not course_list:
         await update.message.reply_text("😔 Não há cursos cadastrados no momento.")
         return
-
     normalized_input = normalize_text(user_input)
     matches = process.extract(normalized_input, course_list, limit=3)
     filtered_matches = [match for match in matches if match[1] > 70]
-
     if not filtered_matches:
         await update.message.reply_text(
             f"🤷‍♂️ Não encontrei nenhum curso parecido com *{user_input}*.",
             parse_mode="Markdown"
         )
         return
-
     best_match = filtered_matches[0][0]
     original_name = original_names[best_match]
-
     for curso_id, curso_info in courses.items():
         if normalize_text(curso_info["nome"]) == best_match:
             await update.message.reply_text(
@@ -228,7 +206,6 @@ async def get_course_link(update: Update, context: CallbackContext):
                 parse_mode="Markdown"
             )
             return
-
     await update.message.reply_text(
         f"🤷‍♂️ Curso *{user_input}* não encontrado.",
         parse_mode="Markdown"
@@ -251,10 +228,8 @@ async def edit_course_nome(update: Update, context: CallbackContext):
     if not matches or matches[0][1] < 70:
         await update.message.reply_text("😕 Não consegui encontrar esse curso. Tente novamente!")
         return ConversationHandler.END
-
     best_match = matches[0][0]
     context.user_data["edit_nome"] = best_match
-
     await update.message.reply_text(
         f"✏️ Editando o curso *{best_match}*.\n\nPor favor, informe qual campo deseja alterar (digite *nome* ou *link*):",
         parse_mode="Markdown"
@@ -269,7 +244,6 @@ async def edit_course_field(update: Update, context: CallbackContext):
             parse_mode="Markdown"
         )
         return ED_CAMPO
-
     context.user_data["edit_field"] = field
     await update.message.reply_text(f"👉 Digite o novo valor para *{field}*:", parse_mode="Markdown")
     return ED_VALOR
@@ -279,7 +253,6 @@ async def edit_course_value(update: Update, context: CallbackContext):
     if not new_value:
         await update.message.reply_text("⚠️ O valor não pode ser vazio. Operação cancelada!")
         return ConversationHandler.END
-
     old_name = context.user_data.get("edit_nome")
     field = context.user_data.get("edit_field")
     courses = courses_ref.get() or {}
@@ -290,7 +263,6 @@ async def edit_course_value(update: Update, context: CallbackContext):
             await update.message.reply_text("🎉 Curso atualizado com sucesso!")
             logger.info(f"Curso atualizado: {old_name} -> {field} alterado para {new_value}")
             return ConversationHandler.END
-
     await update.message.reply_text("❗ Ocorreu um erro ao atualizar o curso. Tente novamente mais tarde!")
     return ConversationHandler.END
 
@@ -311,7 +283,6 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
     if not matches or matches[0][1] < 70:
         await update.message.reply_text("😕 Não encontrei esse curso. Operação cancelada!")
         return ConversationHandler.END
-
     best_match = matches[0][0]
     for curso_id, curso_info in courses.items():
         if curso_info["nome"] == best_match:
@@ -322,15 +293,7 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
             )
             logger.info(f"Curso apagado: {best_match}")
             return ConversationHandler.END
-
     await update.message.reply_text("❗ Ocorreu um erro ao apagar o curso.")
-    return ConversationHandler.END
-
-# --- Cancelar Operação ---
-async def cancel(update: Update, context: CallbackContext):
-    effective_message = get_effective_message(update)
-    await effective_message.reply_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
-    logger.info("Operação cancelada pelo usuário.")
     return ConversationHandler.END
 
 # --- ConversationHandlers ---
@@ -370,29 +333,3 @@ del_conv = ConversationHandler(
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
-
-def main():
-    application = Application.builder().token("SEU_TOKEN_AQUI").build()
-
-    # Handlers de comando
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("listar_cursos", list_courses))
-    application.add_handler(CommandHandler("curso", get_course_link))
-    
-    # Primeiro, adiciona o handler para o botão "Listar Cursos"
-    # Usamos o grupo -1 para garantir prioridade (antes de eventuais ConversationHandlers)
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=-1)
-    
-    # ConversationHandlers
-    application.add_handler(add_conv)
-    application.add_handler(edit_conv)
-    application.add_handler(del_conv)
-    
-    # Handler genérico para debug de callback queries que não forem capturados
-    application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
-    
-    logger.info("Bot iniciado.")
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
