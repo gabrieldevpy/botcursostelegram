@@ -1,5 +1,5 @@
 import os
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
 from handlers import (
     add_conv,
     edit_conv,
@@ -30,7 +30,7 @@ def main():
     app.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=-1)
     app.add_handler(CallbackQueryHandler(cancel_operation, pattern="^cancelar_operacao$"), group=-1)
     
-    # Adiciona os ConversationHandlers
+    # Certifique-se de que add_conv, edit_conv e del_conv são ConversationHandlers válidos
     app.add_handler(add_conv)
     app.add_handler(edit_conv)
     app.add_handler(del_conv)
