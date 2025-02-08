@@ -11,7 +11,7 @@ def main():
         raise ValueError("Token do bot não configurado!")
 
     app = Application.builder().token(bot_token).build()
-    
+
     # Adicione os handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("listar_cursos", list_courses))
