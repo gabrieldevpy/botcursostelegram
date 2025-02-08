@@ -1,3 +1,4 @@
+
 import unicodedata
 import logging
 from firebase_config import initialize_firebase
@@ -147,10 +148,13 @@ async def add_course_link(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Fluxo para Listar Cursos ---
+# Função para o comando /listar_cursos
 async def list_courses(update: Update, context: CallbackContext):
     msg = build_courses_message()
     await update.message.reply_text(msg, parse_mode="Markdown")
     logger.info("Comando /listar_cursos acionado.")
+
+# Função para o callback do botão "Listar Cursos"
 
 async def list_courses_button(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -174,7 +178,7 @@ async def generic_callback_logger(update: Update, context: CallbackContext):
     logger.info(f"Generic callback recebido: {query.data}")
     await query.answer("Callback recebido (genérico)")
 
-# --- Fluxo para Consultar Curso ---
+# --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text(
@@ -300,41 +304,89 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
     course_list = [curso_info["nome"] for curso_info in courses.values()]
     matches = process.extract(nome, course_list, limit=1)
     if not matches or matches[0][1] < 70:
-        await update.message.reply_text("😕 Não encontrei esse curso. Tente novamente!")
+        await update.message.reply_text("😕 Não encontrei esse curso. Operação cancelada!")
         return ConversationHandler.END
 
     best_match = matches[0][0]
-    context.user_data["delete_nome"] = best_match
+    for curso_id, curso_info in courses.items():
+        if curso_info["nome"] == best_match:
+            courses_ref.child(curso_id).delete()
+            await update.message.reply_text(
+                f"✅ O curso *{best_match}* foi apagado com sucesso!",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Curso apagado: {best_match}")
+            return ConversationHandler.END
 
-    await update.message.reply_text(
-        f"🗑️ Você realmente deseja apagar o curso *{best_match}*? Responda com 'sim' ou 'não'.",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text("❗ Ocorreu um erro ao apagar o curso.")
     return ConversationHandler.END
 
-# --- Função Principal de Setup do Bot ---
+# --- Cancelar Operação ---
+async def cancel(update: Update, context: CallbackContext):
+    effective_message = get_effective_message(update)
+    await effective_message.reply_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
+    logger.info("Operação cancelada pelo usuário.")
+    return ConversationHandler.END
+
+# --- ConversationHandlers ---
+add_conv = ConversationHandler(
+    entry_points=[
+        CommandHandler("adicionar_curso", add_course_start),
+        CallbackQueryHandler(add_course_start, pattern="^adicionar_curso$")
+    ],
+    states={
+        AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
+        AD_AREA: [CallbackQueryHandler(add_course_area_callback, pattern="^(" + "|".join(AREAS_DISPONIVEIS) + ")$")],
+        AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)]
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
+
+edit_conv = ConversationHandler(
+    entry_points=[
+        CommandHandler("editar_curso", edit_course_start),
+        CallbackQueryHandler(edit_course_start, pattern="^editar_curso$")
+    ],
+    states={
+        ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
+        ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
+        ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)]
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
+
+del_conv = ConversationHandler(
+    entry_points=[
+        CommandHandler("apagar_curso", delete_course_start),
+        CallbackQueryHandler(delete_course_start, pattern="^apagar_curso$")
+    ],
+    states={
+        AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)]
+    },
+    fallbacks=[CommandHandler("cancelar", cancel)]
+)
+
 def main():
-    """Run the bot."""
-    application = Application.builder().token("YOUR_TOKEN").build()
+    application = Application.builder().token("SEU_TOKEN_AQUI").build()
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
-            AD_AREA: [CallbackQueryHandler(add_course_area_callback, pattern="^(humanas|matematica|ciencias da natureza|redacao|linguagens)$")],
-            AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)],
-
-            ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
-            ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
-            ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)],
-
-            AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)]
-        },
-        fallbacks=[CommandHandler("listar_cursos", list_courses), CallbackQueryHandler(list_courses_button, pattern="listar_cursos")],
-    )
+    # Handlers de comando
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("listar_cursos", list_courses))
+    application.add_handler(CommandHandler("curso", get_course_link))
     
-    application.add_handler(conv_handler)
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # ConversationHandlers
+    application.add_handler(add_conv)
+    application.add_handler(edit_conv)
+    application.add_handler(del_conv)
+    
+    # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="listar_cursos"), group=0)
+    
+    # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
+    application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
+    
+    logger.info("Bot iniciado.")
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
