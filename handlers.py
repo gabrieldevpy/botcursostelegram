@@ -255,36 +255,38 @@ async def edit_course_nome(update: Update, context: CallbackContext):
     return ED_CAMPO
 
 async def edit_course_field(update: Update, context: CallbackContext):
-    field = update.message.text.strip().lower()
-    if field not in ["nome", "link"]:
-        await update.message.reply_text(
-            "❗ Digite apenas *nome* ou *link* para indicar o campo a ser alterado.",
-            parse_mode="Markdown"
-        )
+    campo = update.message.text.strip().lower()
+    if campo not in ["nome", "link"]:
+        await update.message.reply_text("⚠️ Campo inválido. Tente novamente, digitando *nome* ou *link*.")
         return ED_CAMPO
 
-    context.user_data["edit_field"] = field
-    await update.message.reply_text(f"👉 Digite o novo valor para *{field}*:", parse_mode="Markdown")
+    context.user_data["edit_campo"] = campo
+    await update.message.reply_text(f"📝 Qual o novo valor para o campo *{campo.capitalize()}*?")
     return ED_VALOR
 
 async def edit_course_value(update: Update, context: CallbackContext):
-    new_value = update.message.text.strip()
-    if not new_value:
-        await update.message.reply_text("⚠️ O valor não pode ser vazio. Operação cancelada!")
+    valor = update.message.text.strip()
+    nome = context.user_data.get("edit_nome")
+    campo = context.user_data.get("edit_campo")
+
+    courses = courses_ref.get() or {}
+    course_id = None
+    for curso_id, curso_info in courses.items():
+        if curso_info["nome"] == nome:
+            course_id = curso_id
+            break
+
+    if not course_id:
+        await update.message.reply_text("😔 Curso não encontrado para edição.")
         return ConversationHandler.END
 
-    old_name = context.user_data.get("edit_nome")
-    field = context.user_data.get("edit_field")
-    courses = courses_ref.get() or {}
-    for curso_id, curso_info in courses.items():
-        if curso_info["nome"] == old_name:
-            update_data = {field: new_value}
-            courses_ref.child(curso_id).update(update_data)
-            await update.message.reply_text("🎉 Curso atualizado com sucesso!")
-            logger.info(f"Curso atualizado: {old_name} -> {field} alterado para {new_value}")
-            return ConversationHandler.END
+    if campo == "nome":
+        courses_ref.child(course_id).update({"nome": valor})
+        await update.message.reply_text(f"🔸 O nome do curso foi atualizado para *{valor}*.")
+    elif campo == "link":
+        courses_ref.child(course_id).update({"link": valor})
+        await update.message.reply_text(f"🔸 O link do curso foi atualizado para *{valor}*.")
 
-    await update.message.reply_text("❗ Ocorreu um erro ao atualizar o curso. Tente novamente mais tarde!")
     return ConversationHandler.END
 
 # --- Fluxo para Apagar Curso ---
@@ -293,99 +295,75 @@ async def delete_course_start(update: Update, context: CallbackContext):
         logger.info("Callback 'apagar_curso' acionado.")
         await update.callback_query.answer()
     effective_message = get_effective_message(update)
-    await effective_message.reply_text("🗑️ Por favor, informe o nome do curso que deseja apagar:")
+    await effective_message.reply_text("🗑️ Informe o nome do curso que deseja apagar:")
     return AP_NOME
 
-async def delete_course_confirm(update: Update, context: CallbackContext):
+async def delete_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
     course_list = [curso_info["nome"] for curso_info in courses.values()]
     matches = process.extract(nome, course_list, limit=1)
     if not matches or matches[0][1] < 70:
-        await update.message.reply_text("😕 Não encontrei esse curso. Operação cancelada!")
+        await update.message.reply_text("😕 Não consegui encontrar esse curso. Tente novamente!")
         return ConversationHandler.END
 
     best_match = matches[0][0]
-    for curso_id, curso_info in courses.items():
-        if curso_info["nome"] == best_match:
-            courses_ref.child(curso_id).delete()
-            await update.message.reply_text(
-                f"✅ O curso *{best_match}* foi apagado com sucesso!",
-                parse_mode="Markdown"
-            )
-            logger.info(f"Curso apagado: {best_match}")
+    context.user_data["delete_nome"] = best_match
+
+    await update.message.reply_text(
+        f"🗑️ Você tem certeza que deseja apagar o curso *{best_match}*? Responda com *sim* ou *não*."
+    )
+    return ConversationHandler.END
+
+async def delete_course_confirmation(update: Update, context: CallbackContext):
+    confirmation = update.message.text.strip().lower()
+    if confirmation == "sim":
+        nome = context.user_data.get("delete_nome")
+        courses = courses_ref.get() or {}
+        course_id = None
+        for curso_id, curso_info in courses.items():
+            if curso_info["nome"] == nome:
+                course_id = curso_id
+                break
+
+        if not course_id:
+            await update.message.reply_text("😔 Curso não encontrado para exclusão.")
             return ConversationHandler.END
 
-    await update.message.reply_text("❗ Ocorreu um erro ao apagar o curso.")
+        courses_ref.child(course_id).delete()
+        await update.message.reply_text(f"🚮 O curso *{nome}* foi apagado com sucesso.")
+    else:
+        await update.message.reply_text("❌ Ação cancelada.")
+
     return ConversationHandler.END
 
-# --- Cancelar Operação ---
-async def cancel(update: Update, context: CallbackContext):
-    effective_message = get_effective_message(update)
-    await effective_message.reply_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
-    logger.info("Operação cancelada pelo usuário.")
-    return ConversationHandler.END
-
-# --- ConversationHandlers ---
-add_conv = ConversationHandler(
-    entry_points=[
-        CommandHandler("adicionar_curso", add_course_start),
-        CallbackQueryHandler(add_course_start, pattern="^adicionar_curso$")
-    ],
-    states={
-        AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
-        AD_AREA: [CallbackQueryHandler(add_course_area_callback, pattern="^(" + "|".join(AREAS_DISPONIVEIS) + ")$")],
-        AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)]
-    },
-    fallbacks=[CommandHandler("cancelar", cancel)]
-)
-
-edit_conv = ConversationHandler(
-    entry_points=[
-        CommandHandler("editar_curso", edit_course_start),
-        CallbackQueryHandler(edit_course_start, pattern="^editar_curso$")
-    ],
-    states={
-        ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
-        ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
-        ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)]
-    },
-    fallbacks=[CommandHandler("cancelar", cancel)]
-)
-
-del_conv = ConversationHandler(
-    entry_points=[
-        CommandHandler("apagar_curso", delete_course_start),
-        CallbackQueryHandler(delete_course_start, pattern="^apagar_curso$")
-    ],
-    states={
-        AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)]
-    },
-    fallbacks=[CommandHandler("cancelar", cancel)]
-)
-
+# --- Main Application ---
 def main():
-    application = Application.builder().token("SEU_TOKEN_AQUI").build()
+    application = Application.builder().token('YOUR_BOT_TOKEN').build()
 
-    # Handlers de comando
+    # Handler do comando /start
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("listar_cursos", list_courses))
-    application.add_handler(CommandHandler("curso", get_course_link))
-    
-    # ConversationHandlers
-    application.add_handler(add_conv)
-    application.add_handler(edit_conv)
-    application.add_handler(del_conv)
-    
-    # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="listar_cursos"), group=0)
-    
-    # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
-    application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
-    
-    logger.info("Bot iniciado.")
+
+    # Handlers de Conversação (Adicionar, Editar, Apagar cursos)
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler("adicionar_curso", add_course_start), CommandHandler("listar_cursos", list_courses)],
+        states={
+            AD_NOME: [MessageHandler(filters.TEXT, add_course_nome)],
+            AD_AREA: [CallbackQueryHandler(add_course_area_callback)],
+            AD_LINK: [MessageHandler(filters.TEXT, add_course_link)],
+            ED_NOME: [MessageHandler(filters.TEXT, edit_course_nome)],
+            ED_CAMPO: [MessageHandler(filters.TEXT, edit_course_field)],
+            ED_VALOR: [MessageHandler(filters.TEXT, edit_course_value)],
+            AP_NOME: [MessageHandler(filters.TEXT, delete_course_nome)],
+        },
+        fallbacks=[CommandHandler("cancel", delete_course_start)],
+    )
+    application.add_handler(conversation_handler)
+
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="listar_cursos"))
+    application.add_handler(CallbackQueryHandler(generic_callback_logger))
+
     application.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
