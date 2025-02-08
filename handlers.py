@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Inicializa o Firebase
 courses_ref = initialize_firebase()
 
-# Estados para o ConversationHandler
+# Estados para os ConversationHandlers
 AD_NOME, AD_AREA, AD_LINK = range(3)
 ED_NOME, ED_CAMPO, ED_VALOR = range(3, 6)
 AP_NOME = 6
@@ -46,8 +46,7 @@ def get_effective_message(update: Update):
         return update.callback_query.message
     return None
 
-# --- Handlers de Comando ---
-
+# --- Handler de Comando /start ---
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Adicionar Curso", callback_data="adicionar_curso")],
@@ -59,14 +58,12 @@ async def start(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     msg = (
         "👋 Olá! Seja bem-vindo ao *Bot de Cursos*!\n\n"
-        "Escolha uma das opções abaixo ou use os comandos:\n"
-        "/adicionar_curso, /listar_cursos, /curso, /editar_curso, /apagar_curso"
+        "Escolha uma das opções abaixo:"
     )
     effective_message = get_effective_message(update)
     await effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode="Markdown")
 
-# --- Adicionar Curso ---
-
+# --- Fluxo para Adicionar Curso ---
 async def add_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("🤔 Qual é o nome do curso que você gostaria de adicionar?")
@@ -93,6 +90,7 @@ async def add_course_area_callback(update: Update, context: CallbackContext):
     await query.answer()  # Remove o indicador de carregamento do botão
     area = query.data
     context.user_data["add_area"] = area
+
     await query.edit_message_text(
         f"👍 Você escolheu *{area.capitalize()}*.\nAgora, envie o link do curso:",
         parse_mode="Markdown"
@@ -112,13 +110,12 @@ async def add_course_link(update: Update, context: CallbackContext):
     courses_ref.push(course_data)
 
     await update.message.reply_text(
-        f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUse /listar_cursos para conferir todos os cursos.",
+        f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUse o botão 'Listar Cursos' para conferir todos os cursos.",
         parse_mode="Markdown"
     )
     return ConversationHandler.END
 
-# --- Listar Cursos ---
-
+# --- Fluxo para Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
     courses = courses_ref.get() or {}
     effective_message = get_effective_message(update)
@@ -141,12 +138,11 @@ async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     chat_id = update.effective_chat.id
-    # Envia uma mensagem antes de mostrar a lista (opcional)
+    # Envia uma mensagem antes de exibir a lista (opcional)
     await context.bot.send_message(chat_id=chat_id, text="Carregando a lista de cursos...")
     await list_courses(update, context)
 
-# --- Consultar Curso ---
-
+# --- Fluxo para Consultar Curso ---
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text(
@@ -207,8 +203,7 @@ async def course_query_callback(update: Update, context: CallbackContext):
         parse_mode="Markdown"
     )
 
-# --- Editar Curso ---
-
+# --- Fluxo para Editar Curso ---
 async def edit_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("✏️ Qual é o nome do curso que você deseja editar?")
@@ -217,10 +212,8 @@ async def edit_course_start(update: Update, context: CallbackContext):
 async def edit_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
-
     course_list = [curso_info["nome"] for curso_info in courses.values()]
     matches = process.extract(nome, course_list, limit=1)
-
     if not matches or matches[0][1] < 70:
         await update.message.reply_text("😕 Não consegui encontrar esse curso. Tente novamente!")
         return ConversationHandler.END
@@ -266,8 +259,7 @@ async def edit_course_value(update: Update, context: CallbackContext):
     await update.message.reply_text("❗ Ocorreu um erro ao atualizar o curso. Tente novamente mais tarde!")
     return ConversationHandler.END
 
-# --- Apagar Curso ---
-
+# --- Fluxo para Apagar Curso ---
 async def delete_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("🗑️ Qual é o nome do curso que você deseja apagar?")
@@ -278,7 +270,6 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
     courses = courses_ref.get() or {}
     course_list = [curso_info["nome"] for curso_info in courses.values()]
     matches = process.extract(nome, course_list, limit=1)
-
     if not matches or matches[0][1] < 70:
         await update.message.reply_text("😕 Não encontrei esse curso. Operação cancelada!")
         return ConversationHandler.END
@@ -297,15 +288,12 @@ async def delete_course_confirm(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Cancelar Operação ---
-
 async def cancel(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("🚫 Operação cancelada. Se precisar, estou aqui para ajudar!")
     return ConversationHandler.END
 
-# --- Conversation Handlers ---
-
-# Entry points agora incluem também CallbackQueryHandlers para os botões da tela inicial
+# --- ConversationHandlers ---
 add_conv = ConversationHandler(
     entry_points=[
         CommandHandler("adicionar_curso", add_course_start),
@@ -356,7 +344,7 @@ def main():
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handlers para os botões inline que não iniciam conversa
+    # Handlers para botões inline que não iniciam conversa
     application.add_handler(CallbackQueryHandler(list_courses_callback, pattern="^listar_cursos$"))
     application.add_handler(CallbackQueryHandler(course_query_callback, pattern="^curso$"))
     
