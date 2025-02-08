@@ -132,6 +132,8 @@ async def list_courses(update: Update, context: CallbackContext):
     for area, nomes in grouped.items():
         msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
 
+    msg += "\nPara selecionar um curso, use o comando `/curso nome do curso`."
+
     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
 
 async def list_courses_callback(update: Update, context: CallbackContext):
