@@ -14,14 +14,14 @@ from telegram.ext import (
 )
 from fuzzywuzzy import process
 
-# Configuração do logging
+# Configuração do logging para exibir as mensagens no terminal
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Inicializa o Firebase
+# Inicializa o Firebase (certifique-se de que a função initialize_firebase esteja correta)
 courses_ref = initialize_firebase()
 
 # Estados para os ConversationHandlers
@@ -169,6 +169,12 @@ async def list_courses_button(update: Update, context: CallbackContext):
         parse_mode="Markdown"
     )
     logger.info("Mensagem editada com teclado inline para listar cursos.")
+
+# --- Handler Genérico para Debug de Callback Queries ---
+async def generic_callback_logger(update: Update, context: CallbackContext):
+    query = update.callback_query
+    logger.info(f"Generic callback recebido: {query.data}")
+    await query.answer("Callback recebido (genérico)")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -372,7 +378,10 @@ def main():
     application.add_handler(del_conv)
     
     # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"))
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=0)
+    
+    # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
+    application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
     
     logger.info("Bot iniciado.")
     application.run_polling()
