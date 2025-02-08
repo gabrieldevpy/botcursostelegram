@@ -68,15 +68,19 @@ def build_courses_message() -> str:
     )
     return msg
 
-# --- Handler de Comando /start ---
-async def start(update: Update, context: CallbackContext):
+def build_main_keyboard() -> InlineKeyboardMarkup:
+    """Constroi o teclado inline principal com as opções do bot."""
     keyboard = [
         [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
-        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos")],  # Alterado aqui
+        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos")],
         [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
         [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup(keyboard)
+
+# --- Handler de Comando /start ---
+async def start(update: Update, context: CallbackContext):
+    reply_markup = build_main_keyboard()
     msg = (
         "👋 Olá! Seja bem-vindo ao *Bot de Cursos*.\n\n"
         "Escolha uma das opções abaixo:"
@@ -153,15 +157,18 @@ async def list_courses(update: Update, context: CallbackContext):
 async def list_courses_button(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer("Listando cursos...")
-    logger.info("Callback 'listar_cursos' acionado.")  # Atualizado para listar_cursos
+    logger.info("Callback 'listar_cursos' acionado.")
     msg = build_courses_message()
-    try:
-        await query.edit_message_text(text=msg, parse_mode="Markdown")
-        logger.info("Mensagem editada com sucesso para list_courses_button.")
-    except Exception as e:
-        logger.error(f"Erro ao editar a mensagem: {e}")
-        # Caso não seja possível editar a mensagem, envia uma nova mensagem
-        await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
+    
+    # Reinsere o teclado inline para que o botão continue disponível
+    reply_markup = build_main_keyboard()
+    
+    await query.edit_message_text(
+        text=msg,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    logger.info("Mensagem editada com teclado inline para listar cursos.")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
