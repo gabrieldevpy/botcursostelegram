@@ -118,9 +118,9 @@ async def add_course_link(update: Update, context: CallbackContext):
 # --- Fluxo para Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
     courses = courses_ref.get() or {}
-    effective_message = get_effective_message(update)
+    chat_id = update.effective_chat.id  # Obtém o chat_id de forma confiável
     if not courses:
-        await effective_message.reply_text("😔 Ainda não há cursos cadastrados.")
+        await context.bot.send_message(chat_id=chat_id, text="😔 Ainda não há cursos cadastrados.")
         return
 
     grouped = {}
@@ -132,13 +132,12 @@ async def list_courses(update: Update, context: CallbackContext):
     for area, nomes in grouped.items():
         msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
 
-    await effective_message.reply_text(msg, parse_mode="Markdown")
+    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
 
 async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     chat_id = update.effective_chat.id
-    # Envia uma mensagem antes de exibir a lista (opcional)
     await context.bot.send_message(chat_id=chat_id, text="Carregando a lista de cursos...")
     await list_courses(update, context)
 
@@ -339,7 +338,7 @@ def main():
     application.add_handler(CommandHandler("listar_cursos", list_courses))
     application.add_handler(CommandHandler("curso", get_course_link))
     
-    # Conversation Handlers
+    # ConversationHandlers
     application.add_handler(add_conv)
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
