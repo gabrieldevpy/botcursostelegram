@@ -46,6 +46,23 @@ def get_effective_message(update: Update):
         return update.callback_query.message
     return None
 
+def build_courses_message() -> str:
+    """Constroi a mensagem com a lista de cursos agrupados por área."""
+    courses = courses_ref.get() or {}
+    if not courses:
+        return "😔 Ainda não há cursos cadastrados."
+    
+    grouped = {}
+    for curso_id, curso_info in courses.items():
+        area = curso_info.get("area", "desconhecida")
+        grouped.setdefault(area, []).append(curso_info["nome"])
+    
+    msg = "📚 *Cursos Disponíveis:*\n"
+    for area, nomes in grouped.items():
+        msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
+    msg += "\nPara selecionar um curso, use o comando `/curso <nome do curso>`."
+    return msg
+
 # --- Handler de Comando /start ---
 async def start(update: Update, context: CallbackContext):
     keyboard = [
@@ -116,32 +133,15 @@ async def add_course_link(update: Update, context: CallbackContext):
 
 # --- Fluxo para Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
-    courses = courses_ref.get() or {}
-    # Obtém o chat_id de forma confiável
-    chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat.id
-    if not courses:
-        await context.bot.send_message(chat_id=chat_id, text="😔 Ainda não há cursos cadastrados.")
-        return
-
-    grouped = {}
-    for curso_id, curso_info in courses.items():
-        area = curso_info.get("area", "desconhecida")
-        grouped.setdefault(area, []).append(curso_info["nome"])
-
-    msg = "📚 *Cursos Disponíveis:*\n"
-    for area, nomes in grouped.items():
-        msg += f"\n🔸 *{area.capitalize()}*:\n" + "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
-
-    msg += "\nPara selecionar um curso, use o comando `/curso nome do curso`."
-
-    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+    msg = build_courses_message()
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    chat_id = query.message.chat.id
-    await context.bot.send_message(chat_id=chat_id, text="Carregando a lista de cursos...")
-    await list_courses(update, context)
+    msg = build_courses_message()
+    # Atualiza a mensagem original que continha o botão inline
+    await query.edit_message_text(msg, parse_mode="Markdown")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -335,7 +335,7 @@ def main():
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handler para o botão "Listar Cursos"
+    # Handler para o botão "Listar Cursos" (callback inline)
     application.add_handler(CallbackQueryHandler(list_courses_callback, pattern="^listar_cursos$"))
     
     application.run_polling()
