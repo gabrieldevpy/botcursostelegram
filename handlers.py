@@ -10,7 +10,6 @@ from telegram.ext import (
     CallbackContext
 )
 from firebase_config import initialize_firebase  # Firebase configurado
-from firebase_admin import db
 
 # Configuração do logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -135,4 +134,82 @@ async def get_course_link(update: Update, context: CallbackContext):
     else:
         await update.message.reply_text(f"❗ Curso '{nome}' não encontrado.")
 
-# Certifique-se de substituir o token pelo correto ao testar o bot.
+# --- Editar Curso ---
+async def edit_course_start(update: Update, context: CallbackContext):
+    await update.message.reply_text("🔹 Envie o nome do curso que deseja editar:")
+    return ED_NOME
+
+async def edit_course_nome(update: Update, context: CallbackContext):
+    nome = update.message.text.strip()
+    # Busca curso no Firebase
+    courses = courses_ref.get() or {}
+    curso_encontrado = None
+    for curso_id, curso_info in courses.items():
+        if curso_info["nome"].lower() == nome.lower():
+            curso_encontrado = curso_info
+            break
+
+    if not curso_encontrado:
+        await update.message.reply_text("❗ Curso não encontrado.")
+        return ConversationHandler.END
+
+    context.user_data["edit_nome"] = nome
+    await update.message.reply_text(
+        "🔹 O que deseja editar? Responda 'nome' para alterar o nome ou 'link' para alterar o link."
+    )
+    return ED_CAMPO
+
+async def edit_course_field(update: Update, context: CallbackContext):
+    field = update.message.text.strip().lower()
+    if field not in ["nome", "link"]:
+        await update.message.reply_text("❗ Opção inválida. Digite 'nome' ou 'link'.")
+        return ED_CAMPO
+    context.user_data["edit_field"] = field
+    await update.message.reply_text(f"🔹 Envie o novo {field} para o curso:")
+    return ED_VALOR
+
+async def edit_course_value(update: Update, context: CallbackContext):
+    new_val = update.message.text.strip()
+    nome = context.user_data["edit_nome"]
+    field = context.user_data["edit_field"]
+    
+    # Busca e edita no Firebase
+    courses = courses_ref.get() or {}
+    for curso_id, curso_info in courses.items():
+        if curso_info["nome"].lower() == nome.lower():
+            if field == "nome":
+                curso_info["nome"] = new_val
+            else:
+                curso_info["link"] = new_val
+            courses_ref.child(curso_id).update(curso_info)
+            break
+
+    await update.message.reply_text(f"✅ Curso '{nome}' atualizado com sucesso!")
+    return ConversationHandler.END
+
+# --- Apagar Curso ---
+async def delete_course_start(update: Update, context: CallbackContext):
+    await update.message.reply_text("🔹 Envie o nome do curso que deseja apagar:")
+    return AP_NOME
+
+async def delete_course_confirm(update: Update, context: CallbackContext):
+    nome = update.message.text.strip()
+    courses = courses_ref.get() or {}
+    curso_encontrado = None
+    for curso_id, curso_info in courses.items():
+        if curso_info["nome"].lower() == nome.lower():
+            curso_encontrado = curso_id
+            break
+
+    if curso_encontrado:
+        courses_ref.child(curso_encontrado).delete()
+        await update.message.reply_text(f"✅ Curso '{nome}' apagado com sucesso!")
+    else:
+        await update.message.reply_text(f"❗ Curso '{nome}' não encontrado.")
+    
+    await start(update, context)
+    return ConversationHandler.END
+
+# --- Cancelar ---
+async def cancel(update: Update, context: CallbackContext):
+    await update.message.reply_text("❌ Operação cancelada.")
