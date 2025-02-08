@@ -68,23 +68,7 @@ def build_courses_message() -> str:
     )
     return msg
 
-# --- Handler de Comando /start ---
-async def start(update: Update, context: CallbackContext):
-    keyboard = [
-        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
-        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos_btn")],
-        [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
-        [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    msg = (
-        "👋 Olá! Seja bem-vindo ao *Bot de Cursos*.\n\n"
-        "Escolha uma das opções abaixo:"
-    )
-    effective_message = get_effective_message(update)
-    await effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode="Markdown")
-
-# --- Fluxo para Adicionar Curso ---
+# Fluxo para Adicionar Curso
 async def add_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("🤔 Por favor, informe o nome do curso que deseja adicionar:")
@@ -136,78 +120,7 @@ async def add_course_link(update: Update, context: CallbackContext):
     )
     return ConversationHandler.END
 
-# --- Fluxo para Listar Cursos ---
-# Função para o comando /listar_cursos
-async def list_courses(update: Update, context: CallbackContext):
-    msg = build_courses_message()
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-# Função para o callback do botão "Listar Cursos"
-async def list_courses_button(update: Update, context: CallbackContext):
-    logger.info("Callback 'listar_cursos_btn' acionado.")
-    query = update.callback_query
-    await query.answer("Listando cursos...")
-
-    try:
-        msg = build_courses_message()
-        await query.edit_message_text(text=msg, parse_mode="Markdown")
-        logger.info("Mensagem editada com sucesso.")
-    except Exception as e:
-        logger.error(f"Erro ao editar a mensagem: {e}")
-        await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
-
-# --- Fluxo para Consultar Curso (via comando) ---
-async def get_course_link(update: Update, context: CallbackContext):
-    if not context.args:
-        await update.message.reply_text(
-            "❗ Para consultar um curso, utilize:\n`/curso <nome do curso>`",
-            parse_mode="Markdown"
-        )
-        return
-
-    user_input = " ".join(context.args).strip()
-    courses = courses_ref.get() or {}
-
-    course_list = []
-    original_names = {}
-    for curso_id, curso_info in courses.items():
-        original = curso_info["nome"]
-        normalized = normalize_text(original)
-        course_list.append(normalized)
-        original_names[normalized] = original
-
-    if not course_list:
-        await update.message.reply_text("😔 Não há cursos cadastrados no momento.")
-        return
-
-    normalized_input = normalize_text(user_input)
-    matches = process.extract(normalized_input, course_list, limit=3)
-    filtered_matches = [match for match in matches if match[1] > 70]
-
-    if not filtered_matches:
-        await update.message.reply_text(
-            f"🤷‍♂️ Não encontrei nenhum curso parecido com *{user_input}*.",
-            parse_mode="Markdown"
-        )
-        return
-
-    best_match = filtered_matches[0][0]
-    original_name = original_names[best_match]
-
-    for curso_id, curso_info in courses.items():
-        if normalize_text(curso_info["nome"]) == best_match:
-            await update.message.reply_text(
-                f"🔍 Acho que você quis dizer:\n\n🔗 *{original_name}*: {curso_info['link']}",
-                parse_mode="Markdown"
-            )
-            return
-
-    await update.message.reply_text(
-        f"🤷‍♂️ Curso *{user_input}* não encontrado.",
-        parse_mode="Markdown"
-    )
-
-# --- Fluxo para Editar Curso ---
+# Fluxo para Editar Curso
 async def edit_course_start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text("✏️ Informe o nome do curso que deseja editar:")
@@ -242,7 +155,7 @@ async def edit_course_field(update: Update, context: CallbackContext):
 
     context.user_data["edit_field"] = field
 
-    await update.message.reply_text(f"📝 Informe o novo valor para o campo *{field}*:")
+    await update.message.reply_text(f"📝 Informe o novo valor para o campo *{field}*: ")
     return ED_VALOR
 
 async def edit_course_value(update: Update, context: CallbackContext):
@@ -264,11 +177,16 @@ async def edit_course_value(update: Update, context: CallbackContext):
             )
             return ConversationHandler.END
 
+# Fluxo para Listar Cursos
+async def list_courses(update: Update, context: CallbackContext):
+    msg = build_courses_message()
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
 # --- Main Application Setup ---
 def main():
     application = Application.builder().token("YOUR_BOT_TOKEN").build()
 
-    conversation_handler = ConversationHandler(
+    add_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
             AD_NOME: [MessageHandler(filters.TEXT, add_course_nome)],
@@ -282,10 +200,8 @@ def main():
     )
 
     # Adiciona handlers ao aplicativo
-    application.add_handler(conversation_handler)
+    application.add_handler(add_conv)
     application.add_handler(CommandHandler("listar_cursos", list_courses))
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos_btn$"))
-    application.add_handler(CommandHandler("curso", get_course_link))
 
     # Inicia o bot
     application.run_polling()
