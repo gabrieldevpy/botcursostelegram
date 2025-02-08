@@ -25,6 +25,7 @@ def initialize_firebase():
             'databaseURL': 'https://bottelegram-6937f-default-rtdb.firebaseio.com'
         })
         print("✅ Firebase inicializado com sucesso!")
+        # Retorna a referência para a coleção de cursos
         return db.reference('courses')
     except Exception as e:
         print(f"❌ Erro crítico no Firebase: {str(e)}")
