@@ -132,9 +132,12 @@ async def add_course_link(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Fluxo para Listar Cursos ---
-async def list_courses(update: Update, context: CallbackContext):
+async def list_courses_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer("Listando cursos...")  # Informa o usuário (opcional)
     msg = build_courses_message()
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    # Envia uma nova mensagem em vez de editar a original
+    await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
 
 async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
