@@ -51,7 +51,6 @@ async def start(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Adicionar Curso", callback_data="adicionar_curso")],
         [InlineKeyboardButton("Listar Cursos", callback_data="listar_cursos")],
-        [InlineKeyboardButton("Consultar Curso", callback_data="curso")],
         [InlineKeyboardButton("Editar Curso", callback_data="editar_curso")],
         [InlineKeyboardButton("Apagar Curso", callback_data="apagar_curso")]
     ]
@@ -118,7 +117,8 @@ async def add_course_link(update: Update, context: CallbackContext):
 # --- Fluxo para Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
     courses = courses_ref.get() or {}
-    chat_id = update.effective_chat.id  # Obtém o chat_id de forma confiável
+    # Obtém o chat_id de forma confiável
+    chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat.id
     if not courses:
         await context.bot.send_message(chat_id=chat_id, text="😔 Ainda não há cursos cadastrados.")
         return
@@ -137,11 +137,11 @@ async def list_courses(update: Update, context: CallbackContext):
 async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    chat_id = update.effective_chat.id
+    chat_id = query.message.chat.id
     await context.bot.send_message(chat_id=chat_id, text="Carregando a lista de cursos...")
     await list_courses(update, context)
 
-# --- Fluxo para Consultar Curso ---
+# --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
     if not context.args:
         await update.message.reply_text(
@@ -189,16 +189,6 @@ async def get_course_link(update: Update, context: CallbackContext):
 
     await update.message.reply_text(
         f"🤷‍♂️ Curso *{user_input}* não encontrado.",
-        parse_mode="Markdown"
-    )
-
-async def course_query_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
-    chat_id = update.effective_chat.id
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="Para consultar um curso, por favor use:\n`/curso <nome do curso>`",
         parse_mode="Markdown"
     )
 
@@ -343,9 +333,8 @@ def main():
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handlers para botões inline que não iniciam conversa
+    # Handler para o botão "Listar Cursos"
     application.add_handler(CallbackQueryHandler(list_courses_callback, pattern="^listar_cursos$"))
-    application.add_handler(CallbackQueryHandler(course_query_callback, pattern="^curso$"))
     
     application.run_polling()
 
