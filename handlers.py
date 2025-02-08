@@ -1,17 +1,16 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ConversationHandler,
     filters,
-    CallbackContext,
-    CallbackQueryHandler
+    CallbackContext
 )
 from fuzzywuzzy import process
 import unicodedata
 import logging
-import os
+import json
 from firebase_config import initialize_firebase
 
 # Configuração do logging
@@ -39,39 +38,24 @@ def normalize_text(text):
     text = unicodedata.normalize('NFKD', text).encode('ASCII', 'ignore').decode('ASCII')
     return text.lower().strip()
 
-# --- Menu Principal com Botões ---
+# --- Handlers de Comandos ---
 async def start(update: Update, context: CallbackContext):
-    keyboard = [
-        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="add_course")],
-        [InlineKeyboardButton("📚 Listar Cursos", callback_data="list_courses")],
-        [InlineKeyboardButton("🔍 Consultar Curso", callback_data="search_course")],
-        [InlineKeyboardButton("✏️ Editar Curso", callback_data="edit_course")],
-        [InlineKeyboardButton("❌ Apagar Curso", callback_data="delete_course")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("👋 Olá! Escolha uma opção:", reply_markup=reply_markup)
-
-# --- Callback Handler para Botões ---
-async def button_handler(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()  # Responde ao callback (obrigatório)
-
-    if query.data == "add_course":
-        await query.edit_message_text("🔹 Qual é o nome do curso que deseja adicionar?")
-        return AD_NOME
-    elif query.data == "list_courses":
-        await list_courses(update, context)
-    elif query.data == "search_course":
-        await query.edit_message_text("🔍 Digite o nome do curso que deseja consultar:")
-        return ED_NOME
-    elif query.data == "edit_course":
-        await query.edit_message_text("🔹 Envie o nome do curso que deseja editar:")
-        return ED_NOME
-    elif query.data == "delete_course":
-        await query.edit_message_text("🔹 Envie o nome do curso que deseja apagar:")
-        return AP_NOME
+    msg = (
+        "👋 Olá! Eu sou o bot de cursos. Comandos disponíveis:\n"
+        "/adicionar_curso - Adicionar novo curso\n"
+        "/listar_cursos - Listar todos os cursos\n"
+        "/curso <nome> - Consultar link de um curso\n"
+        "/editar_curso - Editar um curso\n"
+        "/apagar_curso - Apagar um curso\n"
+        "/cancelar - Cancelar operação"
+    )
+    await update.message.reply_text(msg)
 
 # --- Adicionar Curso ---
+async def add_course_start(update: Update, context: CallbackContext):
+    await update.message.reply_text("🔹 Qual é o nome do curso que deseja adicionar?")
+    return AD_NOME
+
 async def add_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     if not nome:
@@ -79,26 +63,25 @@ async def add_course_nome(update: Update, context: CallbackContext):
         return AD_NOME
     
     context.user_data["add_nome"] = nome
-
-    # Cria botões para as áreas
-    keyboard = [
-        [InlineKeyboardButton(area.capitalize(), callback_data=f"area_{idx}")]
-        for idx, area in enumerate(AREAS_DISPONIVEIS)
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🔹 Escolha a área do curso:", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "🔹 Escolha a área do curso:\n" +
+        "\n".join([f"{idx+1}. {area.capitalize()}" for idx, area in enumerate(AREAS_DISPONIVEIS)])
+    )
     return AD_AREA
 
 async def add_course_area(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
-
-    area_idx = int(query.data.split("_")[1])
-    area = AREAS_DISPONIVEIS[area_idx]
-    context.user_data["add_area"] = area
-
-    await query.edit_message_text("🔹 Agora envie o link do curso:")
-    return AD_LINK
+    try:
+        escolha = int(update.message.text.strip()) - 1
+        if 0 <= escolha < len(AREAS_DISPONIVEIS):
+            area = AREAS_DISPONIVEIS[escolha]
+            context.user_data["add_area"] = area
+            await update.message.reply_text("🔹 Agora envie o link do curso:")
+            return AD_LINK
+        else:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❗ Opção inválida. Escolha um número entre 1 e 5.")
+        return AD_AREA
 
 async def add_course_link(update: Update, context: CallbackContext):
     link = update.message.text.strip()
@@ -120,12 +103,9 @@ async def add_course_link(update: Update, context: CallbackContext):
 
 # --- Listar Cursos ---
 async def list_courses(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
-
     courses = courses_ref.get() or {}
     if not courses:
-        await query.edit_message_text("❗ Nenhum curso cadastrado.")
+        await update.message.reply_text("❗ Nenhum curso cadastrado.")
         return
     
     grouped = {}
@@ -138,8 +118,7 @@ async def list_courses(update: Update, context: CallbackContext):
         msg += f"\n🔸 {area.capitalize()}:\n"
         msg += "\n".join([f"  - {nome}" for nome in nomes]) + "\n"
     
-    msg += "\nPara consultar o link, use: /curso <nome do curso>"
-    await query.edit_message_text(msg)
+    await update.message.reply_text(msg)
 
 # --- Busca de Curso com Fuzzy Matching ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -184,6 +163,10 @@ async def get_course_link(update: Update, context: CallbackContext):
     await update.message.reply_text(f"❗ Curso '{user_input}' não encontrado.")
 
 # --- Editar Curso ---
+async def edit_course_start(update: Update, context: CallbackContext):
+    await update.message.reply_text("🔹 Envie o nome do curso que deseja editar:")
+    return ED_NOME
+
 async def edit_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
@@ -199,23 +182,20 @@ async def edit_course_nome(update: Update, context: CallbackContext):
     best_match = matches[0][0]
     context.user_data["edit_nome"] = best_match
     
-    # Cria botões para escolher o campo a editar
-    keyboard = [
-        [InlineKeyboardButton("✏️ Editar Nome", callback_data="edit_name")],
-        [InlineKeyboardButton("🔗 Editar Link", callback_data="edit_link")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(f"🔹 Editando curso: {best_match}\nO que deseja alterar?", reply_markup=reply_markup)
+    await update.message.reply_text(
+        f"🔹 Editando curso: {best_match}\n"
+        "O que deseja alterar? (nome/link)"
+    )
     return ED_CAMPO
 
 async def edit_course_field(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
-
-    field = query.data.split("_")[1]  # "name" ou "link"
+    field = update.message.text.strip().lower()
+    if field not in ["nome", "link"]:
+        await update.message.reply_text("❗ Opção inválida. Digite 'nome' ou 'link'.")
+        return ED_CAMPO
+    
     context.user_data["edit_field"] = field
-
-    await query.edit_message_text(f"🔹 Digite o novo {field}:")
+    await update.message.reply_text(f"🔹 Digite o novo {field}:")
     return ED_VALOR
 
 async def edit_course_value(update: Update, context: CallbackContext):
@@ -235,6 +215,10 @@ async def edit_course_value(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Apagar Curso ---
+async def delete_course_start(update: Update, context: CallbackContext):
+    await update.message.reply_text("🔹 Envie o nome do curso que deseja apagar:")
+    return AP_NOME
+
 async def delete_course_confirm(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
@@ -264,52 +248,29 @@ async def cancel(update: Update, context: CallbackContext):
 
 # --- Conversation Handlers ---
 add_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(button_handler, pattern="^add_course$")],
+    entry_points=[CommandHandler("adicionar_curso", add_course_start)],
     states={
         AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
-        AD_AREA: [CallbackQueryHandler(add_course_area, pattern="^area_")],
+        AD_AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_area)],
         AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)],
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
 
 edit_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(button_handler, pattern="^edit_course$")],
+    entry_points=[CommandHandler("editar_curso", edit_course_start)],
     states={
         ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
-        ED_CAMPO: [CallbackQueryHandler(edit_course_field, pattern="^edit_")],
+        ED_CAMPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_field)],
         ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)],
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
 
 del_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(button_handler, pattern="^delete_course$")],
+    entry_points=[CommandHandler("apagar_curso", delete_course_start)],
     states={
         AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)],
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
-
-# --- Configuração do Bot ---
-def main():
-    bot_token = os.getenv("BOT_TOKEN")
-    if not bot_token:
-        raise ValueError("Token do bot não configurado!")
-
-    app = Application.builder().token(bot_token).build()
-    
-    # Adiciona handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(add_conv)
-    app.add_handler(edit_conv)
-    app.add_handler(del_conv)
-    app.add_handler(CommandHandler("listar_cursos", list_courses))
-    app.add_handler(CommandHandler("curso", get_course_link))
-    
-    print("🤖 Bot iniciado!")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
