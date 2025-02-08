@@ -1,6 +1,7 @@
 import unicodedata
 import logging
 from firebase_config import initialize_firebase
+from firebase_admin import db  # Usado para salvar os contatos
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -20,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Inicializa o Firebase (confirme que initialize_firebase está correto)
+# Inicializa o Firebase e obtém a referência dos cursos
 courses_ref = initialize_firebase()
 
 # Estados para os ConversationHandlers
@@ -88,6 +89,14 @@ async def start(update: Update, context: CallbackContext):
     effective_message = get_effective_message(update)
     await effective_message.reply_text(msg, reply_markup=reply_markup, parse_mode="Markdown")
     logger.info("Menu /start exibido com teclado inline.")
+    
+    # Armazena o chat_id no nó "contacts" para enviar notificações futuramente
+    chat_id = update.effective_chat.id
+    contacts_ref = db.reference('contacts')
+    contacts = contacts_ref.get() or {}
+    if str(chat_id) not in contacts:
+        contacts_ref.child(str(chat_id)).set({"chat_id": chat_id})
+        logger.info(f"Usuário {chat_id} adicionado aos contatos.")
 
 # --- Botão Cancelar Operação (callback) ---
 async def cancel_operation(update: Update, context: CallbackContext):
@@ -141,12 +150,38 @@ async def add_course_link(update: Update, context: CallbackContext):
     nome = context.user_data.get("add_nome")
     area = context.user_data.get("add_area")
     course_data = {"nome": nome, "area": area, "link": link}
+    
+    # Adiciona o curso no Firebase
     courses_ref.push(course_data)
+    
     await update.message.reply_text(
         f"🎉 O curso *{nome}* foi adicionado com sucesso!\n\nUtilize o botão *📚 Listar Cursos* para visualizar todos os cursos disponíveis.",
         parse_mode="Markdown"
     )
     logger.info(f"Curso adicionado: {nome} na área {area} com link {link}")
+    
+    # --- Envio de Notificação para todos os contatos ---
+    contacts_ref = db.reference('contacts')
+    contacts = contacts_ref.get() or {}
+    notification_message = (
+        f"🚀 *Novo curso adicionado!*\n\n"
+        f"*{nome}*\n"
+        f"Área: {area.capitalize()}\n"
+        f"[Acesse o curso]({link})"
+    )
+    
+    for key, contact in contacts.items():
+        chat_id = contact.get("chat_id")
+        if chat_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=notification_message,
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar notificação para {chat_id}: {e}")
+    
     return ConversationHandler.END
 
 # --- Fluxo para Listar Cursos ---
