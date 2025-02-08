@@ -11,7 +11,7 @@ from telegram.ext import (
 from fuzzywuzzy import process
 import unicodedata
 import logging
-import json
+import os
 from firebase_config import initialize_firebase
 
 # Configuração do logging
@@ -57,22 +57,21 @@ async def button_handler(update: Update, context: CallbackContext):
     await query.answer()
 
     if query.data == "add_course":
-        await add_course_start(update, context)
+        await query.edit_message_text("🔹 Qual é o nome do curso que deseja adicionar?")
+        return AD_NOME
     elif query.data == "list_courses":
         await list_courses(update, context)
     elif query.data == "search_course":
         await query.edit_message_text("🔍 Digite o nome do curso que deseja consultar:")
         return ED_NOME
     elif query.data == "edit_course":
-        await edit_course_start(update, context)
+        await query.edit_message_text("🔹 Envie o nome do curso que deseja editar:")
+        return ED_NOME
     elif query.data == "delete_course":
-        await delete_course_start(update, context)
+        await query.edit_message_text("🔹 Envie o nome do curso que deseja apagar:")
+        return AP_NOME
 
 # --- Adicionar Curso ---
-async def add_course_start(update: Update, context: CallbackContext):
-    await update.callback_query.edit_message_text("🔹 Qual é o nome do curso que deseja adicionar?")
-    return AD_NOME
-
 async def add_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     if not nome:
@@ -182,10 +181,6 @@ async def get_course_link(update: Update, context: CallbackContext):
     await update.message.reply_text(f"❗ Curso '{user_input}' não encontrado.")
 
 # --- Editar Curso ---
-async def edit_course_start(update: Update, context: CallbackContext):
-    await update.callback_query.edit_message_text("🔹 Envie o nome do curso que deseja editar:")
-    return ED_NOME
-
 async def edit_course_nome(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
@@ -237,10 +232,6 @@ async def edit_course_value(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Apagar Curso ---
-async def delete_course_start(update: Update, context: CallbackContext):
-    await update.callback_query.edit_message_text("🔹 Envie o nome do curso que deseja apagar:")
-    return AP_NOME
-
 async def delete_course_confirm(update: Update, context: CallbackContext):
     nome = update.message.text.strip()
     courses = courses_ref.get() or {}
@@ -270,27 +261,27 @@ async def cancel(update: Update, context: CallbackContext):
 
 # --- Conversation Handlers ---
 add_conv = ConversationHandler(
-    entry_points=[CommandHandler("adicionar_curso", add_course_start)],
+    entry_points=[CallbackQueryHandler(button_handler, pattern="^add_course$")],
     states={
         AD_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_nome)],
-        AD_AREA: [CallbackQueryHandler(add_course_area)],
+        AD_AREA: [CallbackQueryHandler(add_course_area, pattern="^area_")],
         AD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_course_link)],
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
 
 edit_conv = ConversationHandler(
-    entry_points=[CommandHandler("editar_curso", edit_course_start)],
+    entry_points=[CallbackQueryHandler(button_handler, pattern="^edit_course$")],
     states={
         ED_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_nome)],
-        ED_CAMPO: [CallbackQueryHandler(edit_course_field)],
+        ED_CAMPO: [CallbackQueryHandler(edit_course_field, pattern="^edit_")],
         ED_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_course_value)],
     },
     fallbacks=[CommandHandler("cancelar", cancel)]
 )
 
 del_conv = ConversationHandler(
-    entry_points=[CommandHandler("apagar_curso", delete_course_start)],
+    entry_points=[CallbackQueryHandler(button_handler, pattern="^delete_course$")],
     states={
         AP_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_course_confirm)],
     },
