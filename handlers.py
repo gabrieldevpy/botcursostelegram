@@ -142,13 +142,19 @@ async def list_courses(update: Update, context: CallbackContext):
     msg = build_courses_message()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# Nova função para o callback do botão "Listar Cursos"
+# Função para o callback do botão "Listar Cursos"
 async def list_courses_button(update: Update, context: CallbackContext):
+    logger.info("Callback 'listar_cursos_btn' acionado.")
     query = update.callback_query
     await query.answer("Listando cursos...")
     msg = build_courses_message()
-    # Envia uma nova mensagem com a lista de cursos
-    await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
+    try:
+        await query.edit_message_text(text=msg, parse_mode="Markdown")
+        logger.info("Mensagem editada com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao editar a mensagem: {e}")
+        # Caso não seja possível editar a mensagem, envia uma nova mensagem
+        await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -342,7 +348,7 @@ def main():
     application.add_handler(edit_conv)
     application.add_handler(del_conv)
     
-    # Handler para o botão "Listar Cursos" (novo callback_data: listar_cursos_btn)
+    # Handler para o botão "Listar Cursos" (callback_data: listar_cursos_btn)
     application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos_btn$"))
     
     application.run_polling()
