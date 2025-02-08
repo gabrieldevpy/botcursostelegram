@@ -1,4 +1,4 @@
-Sim import unicodedata
+import unicodedata
 import logging
 from firebase_config import initialize_firebase
 
