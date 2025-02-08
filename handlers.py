@@ -157,9 +157,9 @@ async def list_courses(update: Update, context: CallbackContext):
 
 async def list_courses_button(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer("Botão pressionado!")  # Resposta simples para confirmar
-    logger.info("Botão 'Listar Cursos' pressionado!")
-
+    await query.answer("Listando cursos...")
+    logger.info("Callback 'listar_cursos' acionado.")
+    msg = build_courses_message()
 
     # Reinsere o teclado inline para que o botão continue disponível
     reply_markup = build_main_keyboard()
