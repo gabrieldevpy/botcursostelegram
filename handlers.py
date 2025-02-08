@@ -71,8 +71,8 @@ def build_courses_message() -> str:
 def build_main_keyboard() -> InlineKeyboardMarkup:
     """Constroi o teclado inline principal com as opções do bot."""
     keyboard = [
-        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="listar_cursos")],
-        [InlineKeyboardButton("📚 Listar Cursos", callback_data="adicionar_curso")],
+        [InlineKeyboardButton("➕ Adicionar Curso", callback_data="adicionar_curso")],
+        [InlineKeyboardButton("📚 Listar Cursos", callback_data="listar_cursos")],
         [InlineKeyboardButton("✏️ Editar Curso", callback_data="editar_curso")],
         [InlineKeyboardButton("🗑️ Apagar Curso", callback_data="apagar_curso")]
     ]
@@ -378,7 +378,7 @@ def main():
     application.add_handler(del_conv)
     
     # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=0)
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="listar_cursos"), group=0)
     
     # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
     application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
