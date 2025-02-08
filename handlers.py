@@ -132,19 +132,22 @@ async def add_course_link(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # --- Fluxo para Listar Cursos ---
-async def list_courses_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer("Listando cursos...")  # Informa o usuário (opcional)
+# Função para o comando /listar_cursos
+async def list_courses(update: Update, context: CallbackContext):
     msg = build_courses_message()
-    # Envia uma nova mensagem em vez de editar a original
-    await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
+# Função para o callback do botão "Listar Cursos"
 async def list_courses_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    await query.answer("Listando cursos...")
     msg = build_courses_message()
-    # Atualiza a mensagem original que continha o botão inline
-    await query.edit_message_text(msg, parse_mode="Markdown")
+    try:
+        await query.edit_message_text(msg, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Erro ao editar mensagem: {e}")
+        # Se ocorrer erro, envia uma nova mensagem
+        await context.bot.send_message(chat_id=query.message.chat.id, text=msg, parse_mode="Markdown")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
