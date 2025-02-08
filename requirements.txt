@@ -1,5 +1,5 @@
-python-telegram-bot
-firebase-admin
 python-dotenv
-fuzzywuzzy
 python-Levenshtein
+python-telegram-bot>=20.0
+fuzzywuzzy
+firebase-admin
