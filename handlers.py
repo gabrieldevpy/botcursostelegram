@@ -1,4 +1,3 @@
-
 import unicodedata
 import logging
 from firebase_config import initialize_firebase
@@ -155,28 +154,34 @@ async def list_courses(update: Update, context: CallbackContext):
     logger.info("Comando /listar_cursos acionado.")
 
 # Função para o callback do botão "Listar Cursos"
-
 async def list_courses_button(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer("Listando cursos...")
-    logger.info("Callback 'listar_cursos' acionado.")
-    msg = build_courses_message()
+    try:
+        query = update.callback_query
+        logger.info(f"Callback recebido com data: {query.data}")
+        await query.answer("Listando cursos...")
+        logger.info("Callback 'listar_cursos' acionado.")
 
-    # Reinsere o teclado inline para que o botão continue disponível
-    reply_markup = build_main_keyboard()
-    
-    await query.edit_message_text(
-        text=msg,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-    logger.info("Mensagem editada com teclado inline para listar cursos.")
+        msg = build_courses_message()
+        # Reinsere o teclado inline para que o botão continue disponível
+        reply_markup = build_main_keyboard()
+        
+        await query.edit_message_text(
+            text=msg,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        logger.info("Mensagem editada com teclado inline para listar cursos.")
+    except Exception as e:
+        logger.error(f"Erro no list_courses_button: {e}")
 
 # --- Handler Genérico para Debug de Callback Queries ---
 async def generic_callback_logger(update: Update, context: CallbackContext):
-    query = update.callback_query
-    logger.info(f"Generic callback recebido: {query.data}")
-    await query.answer("Callback recebido (genérico)")
+    try:
+        query = update.callback_query
+        logger.info(f"Generic callback recebido: {query.data}")
+        await query.answer("Callback recebido (genérico)")
+    except Exception as e:
+        logger.error(f"Erro no generic_callback_logger: {e}")
 
 # --- Fluxo para Consultar Curso (via comando) ---
 async def get_course_link(update: Update, context: CallbackContext):
@@ -380,7 +385,8 @@ def main():
     application.add_handler(del_conv)
     
     # Handler para o botão "Listar Cursos" (callback_data: listar_cursos)
-    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="listar_cursos"), group=0)
+    # Usando âncoras para que o padrão corresponda exatamente:
+    application.add_handler(CallbackQueryHandler(list_courses_button, pattern="^listar_cursos$"), group=0)
     
     # Handler genérico para debug de callback queries que não forem capturados pelo handler específico
     application.add_handler(CallbackQueryHandler(generic_callback_logger), group=1)
